@@ -1,0 +1,217 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+## Divvy Bikeshare Full Year Analysis
+The purpose of this script is to consolidate downloaded Divvy data into a single dataframe and then conduct simple analysis to help answer the key question: “In what ways do members and guest riders use Divvy bikes differently?”
+
+#### Loading libraries
+```{r}
+library(tidyverse)  
+library(lubridate)  
+library(ggplot2)
+
+```
+
+#### Data Collection
+reading .csv files in to dataframes
+```{r}
+tripdata_2020_09 <- read_csv("202009-divvy-tripdata.csv")
+tripdata_2020_10 <- read_csv("202010-divvy-tripdata.csv")
+tripdata_2020_11 <- read_csv("202011-divvy-tripdata.csv")
+tripdata_2020_12 <- read_csv("202012-divvy-tripdata.csv")
+tripdata_2021_01 <- read_csv("202101-divvy-tripdata.csv")
+tripdata_2021_02 <- read_csv("202102-divvy-tripdata.csv")
+tripdata_2021_03 <- read_csv("202103-divvy-tripdata.csv")
+tripdata_2021_04 <- read_csv("202104-divvy-tripdata.csv")
+tripdata_2021_05 <- read_csv("202105-divvy-tripdata.csv")
+tripdata_2021_06 <- read_csv("202106-divvy-tripdata.csv")
+tripdata_2021_07 <- read_csv("202107-divvy-tripdata.csv")
+tripdata_2021_08 <- read_csv("202108-divvy-tripdata.csv")
+```
+#### Data consolidation
+First a look at the column names of each dataframe
+```{r}
+colnames(tripdata_2020_09)
+colnames(tripdata_2020_10)
+colnames(tripdata_2020_11)
+colnames(tripdata_2020_12)
+colnames(tripdata_2021_01)
+colnames(tripdata_2021_02)
+colnames(tripdata_2021_03)
+colnames(tripdata_2021_04)
+colnames(tripdata_2021_05)
+colnames(tripdata_2021_06)
+colnames(tripdata_2021_07)
+colnames(tripdata_2021_08)
+```
+
+Now to check dataframe structures for incongruencies
+```{r}
+str(tripdata_2020_09)
+str(tripdata_2020_10)
+str(tripdata_2020_11)
+str(tripdata_2020_12)
+str(tripdata_2021_01)
+str(tripdata_2021_02)
+str(tripdata_2021_03)
+str(tripdata_2021_04)
+str(tripdata_2021_05)
+str(tripdata_2021_06)
+str(tripdata_2021_07)
+str(tripdata_2021_08)
+```
+Converting column data types to match for consolidation
+```{r}
+tripdata_2020_09 <- mutate(tripdata_2020_09, start_station_id = as.character(start_station_id), end_station_id = as.character(end_station_id))
+tripdata_2020_10 <- mutate(tripdata_2020_10, start_station_id = as.character(start_station_id), end_station_id = as.character(end_station_id))
+tripdata_2020_11 <- mutate(tripdata_2020_11, start_station_id = as.character(start_station_id), end_station_id = as.character(end_station_id))
+```
+
+Combine dataframes into one
+
+```{r}
+all_data <- bind_rows(tripdata_2020_09, tripdata_2020_10, tripdata_2020_11, tripdata_2020_12, tripdata_2021_01, tripdata_2021_02, tripdata_2021_03, tripdata_2021_04, tripdata_2021_05, tripdata_2021_06, tripdata_2021_07, tripdata_2021_08)
+```
+
+Removing columns unnecessary for analysis
+```{r}
+all_data <- all_data %>%  
+  select(-c(start_lat, start_lng, end_lat, end_lng))
+
+```
+ 
+#### Data cleaning and prep
+
+first a brief overall look at the data and it's properties
+```{r}
+colnames(all_data)  #List of column names
+nrow(all_data)  #How many rows are in data frame?
+dim(all_data)  #Dimensions of the data frame?
+head(all_data)  #See the first 6 rows of data frame.  Also tail(all_trips)
+str(all_data)  #See list of columns and data types (numeric, character, etc)
+summary(all_data)  #Statistical summary of data. Mainly for numerics
+
+```
+
+There are a few issues that needs to be fixed:
+
+(1) In the "member_casual" column, there are two names for members ("member" and "Subscriber") and two names for casual riders ("Customer" and "casual"). These will be consolidated from four to two labels
+
+(2) The data can only be aggregated at the ride-level, which is too granular. Additional columns of data -- such as day, month, year -- will be added to provide additional opportunities to aggregate the data.
+
+(3)  A calculation will be needed to determine the length of each trip, this will add another column which will be called "ride_length" to the data frame. 
+
+
+Reassigning values to the correct labels: 
+```{r}
+all_data <-  all_data %>% 
+  mutate(member_casual = recode(member_casual
+                           ,"Subscriber" = "member"
+                           ,"Customer" = "casual"))
+
+```
+
+Adding additional columns for detailed analysis
+```{r}
+all_data$date <- as.Date(all_data$started_at) #The default format is yyyy-mm-dd
+all_data$month <- format(as.Date(all_data$date), "%m")
+all_data$day <- format(as.Date(all_data$date), "%d")
+all_data$year <- format(as.Date(all_data$date), "%Y")
+all_data$day_of_week <- format(as.Date(all_data$date), "%A")
+```
+
+Adding a function to calculate the ride length
+```{r}
+all_data$ride_length <- difftime(all_data$ended_at,all_data$started_at)
+
+```
+
+inspecting the structure of the dataframe
+```{r}
+str(all_data)
+```
+
+Converting ride_length to numeric data type to perform calculations
+```{r}
+is.factor(all_data$ride_length)
+all_data$ride_length <- as.numeric(as.character(all_data$ride_length))
+is.numeric(all_data$ride_length)
+
+```
+
+Remove bad data: A few hundred times bikes where checked out for service and repairs by "HQ QR" while some rides show a negative ride time.
+A new database called "all_data_v2" will be created by filtering out such entries
+```{r}
+all_data_v2 <- all_data[!(all_data$start_station_name == "HQ QR" | all_data$ride_length<0),]
+
+```
+
+#### Descriptive Analysis
+
+Descriptive analysis on ride_length (all figures in seconds)
+```{r}
+aggregate(all_data_v2$ride_length ~ all_data_v2$member_casual, FUN = mean)
+aggregate(all_data_v2$ride_length ~ all_data_v2$member_casual, FUN = median)
+aggregate(all_data_v2$ride_length ~ all_data_v2$member_casual, FUN = max)
+aggregate(all_data_v2$ride_length ~ all_data_v2$member_casual, FUN = min)
+
+```
+
+Now a look at the average ride time by day for members vs casual users
+```{r}
+aggregate(all_data_v2$ride_length ~ all_data_v2$member_casual + all_data_v2$day_of_week, FUN = mean)
+
+```
+
+Fixing order of days in dataframe
+```{r}
+all_data_v2$day_of_week <- ordered(all_data_v2$day_of_week, levels=c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+
+```
+
+Now recalculating average ride time by day for member vs casual users
+```{r}
+aggregate(all_data_v2$ride_length ~ all_data_v2$member_casual + all_data_v2$day_of_week, FUN = mean)
+
+```
+
+Analyze rider data by user type and week day
+```{r}
+all_data_v2 %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>%  
+  group_by(member_casual, weekday) %>%  		
+  summarise(number_of_rides = n(), average_duration = mean(ride_length)) %>% 		
+  arrange(member_casual, weekday)			
+
+```
+#### Visualizations
+
+Visualization of number rides by user type 
+```{r}
+all_data_v2 %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>% 
+  group_by(member_casual, weekday) %>% 
+  summarise(number_of_rides = n(), average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, weekday)  %>% 
+  ggplot(aes(x = weekday, y = number_of_rides, fill = member_casual)) +
+  geom_col(position = "dodge")+
+  scale_y_continuous(labels = function(x) paste0(x/1e3, " Thousand"))+
+  labs(title = "Daily rides by usertype", x = "Day of the week", y = "Number of rides", fill = "user type")
+
+```
+
+Visualization of average ride duration(seconds)
+```{r}
+all_data_v2 %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>% 
+  group_by(member_casual, weekday) %>% 
+  summarise(number_of_rides = n(),average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, weekday)  %>% 
+  ggplot(aes(x = weekday, y = average_duration, fill = member_casual)) +
+  geom_col(position = "dodge") +
+  labs(title = "Average daily ride duration by user type", x ="Day of the week", y = "Average ride duration", fill = "User type")
+
+```
+
