@@ -1,2 +1,0 @@
-Data used to perform analysis downloaded from Index of bucket "divvy-tripdata"
-link: https://divvy-tripdata.s3.amazonaws.com/index.html
