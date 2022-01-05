@@ -89,7 +89,7 @@ first a brief overall look at the data and it's properties
 colnames(all_data)  #List of column names
 nrow(all_data)  #How many rows are in data frame?
 dim(all_data)  #Dimensions of the data frame?
-head(all_data)  #See the first 6 rows of data frame.  Also tail(all_trips)
+head(all_data)  #See the first 6 rows of data frame.  Also tail(all_data)
 str(all_data)  #See list of columns and data types (numeric, character, etc)
 summary(all_data)  #Statistical summary of data. Mainly for numerics
 
